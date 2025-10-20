@@ -1,0 +1,117 @@
+# 📁 .github/workflows/ci-cd.yml
+# ─────────────────────────────────────────────
+# 🌐 CI/CD Pipeline – Build, Test & Deploy to Cloud Run
+
+name: CI/CD Pipeline
+
+# 🔹 Trigger: Bei jedem Push oder Pull Request auf main
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 🔹 Globale Umgebungsvariablen (für alle Jobs)
+env:
+  NODE_VERSION: '18'
+  GCP_PROJECT_ID: 'adept-stage-475717-m8'
+  GCP_REGION: 'europe-west3'
+  SERVICE_NAME: 'cicd-demo-app'
+
+jobs:
+  # ═══════════════════════════════════════════
+  # 🧪 JOB 1: LINT & TEST
+  # ═══════════════════════════════════════════
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      # ✅ Checkout Code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 🟢 Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # 📦 Install Dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # 🔍 Run Linting
+      - name: Run ESLint
+        run: npm run lint
+
+      # 🧩 Run Tests
+      - name: Run tests
+        run: npm test
+
+      # 📤 Upload Test Results (optional)
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: coverage/
+
+  # ═══════════════════════════════════════════
+  # 🐳 JOB 2: BUILD DOCKER IMAGE
+  # ═══════════════════════════════════════════
+  build:
+    name: Build Docker Image
+    needs: test  # Nur wenn Tests erfolgreich sind!
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # ⚙️ Setup Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # 🏗️ Build Image (nicht pushen, nur bauen)
+      - name: Build Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: false
+          tags: ${{ env.SERVICE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ═══════════════════════════════════════════
+  # ☁️ JOB 3: DEPLOY TO CLOUD RUN
+  # ═══════════════════════════════════════════
+  deploy:
+    name: Deploy to Cloud Run
+    needs: build  # Nur wenn Build erfolgreich!
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'  # Nur auf main-Branch!
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 🔐 Authenticate to GCP
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # ☁️ Setup gcloud CLI
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      # 🚀 Deploy to Cloud Run
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --source . \
+            --platform managed \
+            --region ${{ env.GCP_REGION }} \
+            --allow-unauthenticated \
