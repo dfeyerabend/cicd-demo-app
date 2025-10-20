@@ -1,0 +1,18 @@
+{
+  // 📁 .eslintrc.json
+  // ─────────────────────────────────────
+  // ESLint-Konfiguration für Node + Jest
+
+  "env": {
+    "node": true,   // Aktiviert Node.js-spezifische Globals (require, module, etc.)
+    "es2021": true, // Unterstützt moderne ES2021-Syntax
+    "jest": true    // Erlaubt Jest-Testumgebung (describe, it, expect)
+  },
+
+  "extends": "eslint:recommended", // Basisregeln von ESLint aktivieren
+
+  "rules": {
+    "no-console": "warn",       // console.log() gibt nur Warnung (kein Fehler)
+    "no-unused-vars": "error"   // Ungenutzte Variablen sind Fehler
+  }
+}
